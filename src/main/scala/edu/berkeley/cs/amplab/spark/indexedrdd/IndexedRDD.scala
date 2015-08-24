@@ -165,6 +165,7 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
   /** Applies a function to corresponding partitions of `this` and a pair RDD. */
   private def zipPartitionsWithOther[V2: ClassTag, V3: ClassTag](other: RDD[(K, V2)])
       (f: OtherZipPartitionsFunction[V2, V3]): IndexedRDD[K, V3] = {
+    System.out.println("Zip repartition: " + (Some(partitioner.get) != other.partitioner))
     val partitioned = other.partitionBy(partitioner.get)
     val newPartitionsRDD = partitionsRDD.zipPartitions(partitioned, true)(f)
     new IndexedRDD(newPartitionsRDD)
@@ -173,6 +174,15 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
   /** Applies a function to corresponding partitions of `this` and a pair RDD. */
   private def zipPartitionsWithOtherPlain[V2: ClassTag, V3: ClassTag](other: RDD[(K, V2)])
         (f: OtherZipPartitionsFunctionPlain[V2, V3]): RDD[(K, V3)] = {
+    System.out.println("Zip plain repartition: " + (Some(partitioner.get) != other.partitioner))
+    if (partitioner.get.isInstanceOf[HashPartitioner] && other.partitioner.get.isInstanceOf[HashPartitioner]) {
+      System.out.println("Hash partitioners: %d %d".format(
+      partitioner.get.asInstanceOf[HashPartitioner].numPartitions,
+      other.partitioner.get.asInstanceOf[HashPartitioner].numPartitions
+      ))
+    } else {
+      println("Not hash partitioners...")
+    }
     val partitioned = other.partitionBy(partitioner.get)
     partitionsRDD.zipPartitions(partitioned, true)(f)
   }
@@ -451,6 +461,7 @@ object IndexedRDD {
   def updatable[K: ClassTag : KeySerializer, U: ClassTag, V: ClassTag]
       (elems: RDD[(K, U)], z: (K, U) => V, f: (K, V, U) => V)
     : IndexedRDD[K, V] = {
+    System.out.println("Construction repartition: " + !elems.partitioner.isDefined)
     val elemsPartitioned =
       if (elems.partitioner.isDefined) elems
       else elems.partitionBy(new HashPartitioner(elems.partitions.size))
